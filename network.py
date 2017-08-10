@@ -1,14 +1,21 @@
 import numpy as np
 
 class Network(object):
-    def __init__(self, sizes):
+    def __init__(self, sizes, activations):
         """
         sizes: a list of size of each layer, including input and output layer
-        activation: activation function
+        activations: a list of activation functions corresponding to each layer except for input layer
         """
+        # check dimension matching
+        if len(sizes) != len(activations) + 1:
+            raise ValueError('number of layers except input layer and number of activations do not match')
+        
         self.length = len(sizes)
         self.sizes = sizes
+        self.activation_functions = activations
         
+        
+        # initialize weights
         self.initialize_weights()
     
     def initialize_weights(self):
@@ -34,10 +41,10 @@ class Network(object):
         activations.append(a)
         
         # loop through all layers
-        for W, b in zip(self.W, self.b):
+        for W, b, activation_function in zip(self.W, self.b, self.activation_functions):
             z = np.dot(W, a) + b
             zs.append(z)
-            a = self.sigmoid(z)
+            a = activation_function.evaluate(z)
             activations.append(a)
             
             
@@ -46,8 +53,8 @@ class Network(object):
         """
         batch_size = self.batch_size
         
-        # errors for each layer
-        delta = self.cost_derivative(activations[-1], labels) * self.sigmoid_prime(zs[-1])
+        # errors for output layer
+        delta = self.cost_derivative(activations[-1], labels) * self.activation_functions[-1].prime(zs[-1])
         
         # weight and bias updates
         delta_weights = [np.zeros(W.shape) for W in self.W]
@@ -58,7 +65,7 @@ class Network(object):
         
 
         for i in range(2, self.length):
-            delta = np.dot(self.W[-i + 1].T, delta) * self.sigmoid_prime(zs[-i])
+            delta = np.dot(self.W[-i + 1].T, delta) * self.activation_functions[-i].prime(zs[-i])
             
             # average updates over mini-batch
             delta_weights[-i] = np.dot(delta, activations[-i - 1].T)/batch_size
@@ -89,7 +96,11 @@ class Network(object):
         # concatenate to one array for shuffling
         data_labels = np.concatenate((data, labels), axis = 1)
         
-        for e in range(epochs):
+        for e in range(epochs + 1):
+            
+            # training accuracy for after each epoch
+            if e > 0:
+                print("Training accuracy: ", self.score(data, labels))
             print("Epoch ", e + 1)
             
             # randomly shuffle data and labels for each epoch
@@ -115,9 +126,8 @@ class Network(object):
     def predict(self, data):
         # feedforward
         a = data
-        for W, b in zip(self.W, self.b):
-            a = self.sigmoid(np.dot(W, a) + b)
-        print(a)
+        for W, b, activation_function in zip(self.W, self.b, self.activation_functions):
+            a = activation_function.evaluate(np.dot(W, a) + b)
         return np.argmax(a, axis = 0)
     
     
@@ -126,14 +136,6 @@ class Network(object):
         compute the derivatives of cost with respect to output activations
         """
         return (output_activations - labels)
-    
-      
-    def sigmoid(self, z):
-        return 1.0/(1.0 + np.exp(-z))
-    
-    
-    def sigmoid_prime(self, z):
-        return self.sigmoid(z)*(1 - self.sigmoid(z))
     
     
     
