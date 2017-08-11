@@ -29,3 +29,16 @@ class Tanh(object):
     
     def prime(self, z):
         return 1 - np.tanh(z) ** 2
+    
+class Softmax(object):
+    def __init__(self):
+        pass
+    
+    def evaluate(self, z):
+        z = z - np.max(z, axis = 0)
+        return np.exp(z)/np.sum(np.exp(z), axis = 0)
+         
+    def prime(self, z):
+        # not fully implemented yet
+        a = self.evaluate(z)
+        return np.diag(np.sum(a, axis = 1)) - np.dot(a, a.T)
