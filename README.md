@@ -30,3 +30,7 @@
 
 ### Regularizer
 1. L2 regularizer
+
+
+### Others
+1. Batch normalization

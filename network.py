@@ -5,33 +5,43 @@ import json
 from libNN.optimizer import SGD
 
 class Network(object):
-    def __init__(self, sizes, activations, cost):
+    def __init__(self, sizes, activations, cost, batch_normalizations=None):
         """
         sizes: a list of size of each layer, including input and output layer
         activations: a list of activation functions corresponding to each layer except for input layer
+        batch_normalizations: a list of BatchNormalization objects
         cost: cost function
         """
         # check dimension matching
         if len(sizes) != len(activations) + 1:
             raise ValueError('number of layers except input layer and number of activations do not match')
+        elif (batch_normalizations != None) and (len(activations) != len(batch_normalizations)):
+            raise ValueError('number of layers except input layer and number of batch normalization layers do not match')
         
         self.length = len(sizes)
         self.sizes = sizes
         self.activation_functions = activations
+        self.batch_normalizations = batch_normalizations
         self.cost = cost
         
         
-        # initialize weights
-        self.initialize_weights()
+        # initialize params
+        self.initialize_params()
     
-    def initialize_weights(self):
+    def initialize_params(self):
         """
         initialize weights and bias for each layer to corresponding size
+        initialize batch normalization layers
         """
+        # inti weights and biases
         self.W = [np.random.randn(y, x) for x, y in zip(self.sizes[:-1], self.sizes[1:])]
         self.b = [np.random.randn(y, 1) for y in self.sizes[1:]]
-    
         
+        # init batch normalization layers
+        for i in range(len(self.batch_normalizations)):
+            if self.batch_normalizations[i]:
+                self.batch_normalizations[i].init_params(self.sizes[i+1])
+                
         
     def backpropagate(self, data, labels):
         """
@@ -41,15 +51,19 @@ class Network(object):
         """
         zs = []
         
-        
         # input data as activations in the first layer
         a = data
         activations = [a]
-        # print(sum(a))
         
         # loop through all layers
-        for W, b, activation_function in zip(self.W, self.b, self.activation_functions):
+        for W, b, activation_function, BN in zip(self.W, self.b, self.activation_functions, self.batch_normalizations):
             z = np.dot(W, a) + b
+            
+            # batch normalization
+            if BN:
+                # print("---")
+                z = BN.transform(z)
+            
             zs.append(z)
             a = activation_function.evaluate(z)
             activations.append(a)
@@ -63,6 +77,11 @@ class Network(object):
         # deltas for output layer
         delta = self.cost.delta(zs[-1], labels, self.activation_functions[-1])
         
+        # if there is batch normalization at output layer
+        if self.batch_normalizations[-1]:
+            # print("---")
+            delta = self.batch_normalizations[-1].backprop(delta)
+        
         # weight and bias updates
         delta_weights = [np.zeros(W.shape) for W in self.W]
         delta_biases = [np.zeros(b.shape) for b in self.b]
@@ -74,10 +93,16 @@ class Network(object):
         # output layer gradients
         delta_weights[-1] = np.matmul(delta, activations[-2].T)/batch_size
         delta_biases[-1] = np.mean(delta, axis = 1, keepdims=True)
+            
         
         # hidden layer weights and biases
         for i in range(2, self.length):
             delta = np.dot(self.W[-i + 1].T, delta) * self.activation_functions[-i].prime(zs[-i])
+            
+            # backprop for batch normalization
+            if self.batch_normalizations[-i]:
+                # print("---")
+                delta = self.batch_normalizations[-i].backprop(delta)
             
             # average updates over mini-batch
             delta_weights[-i] = np.dot(delta, activations[-i - 1].T)/batch_size
@@ -92,23 +117,15 @@ class Network(object):
         delta_weights = [dW + self._lambda * dRW/self.n for dW, dRW in zip(delta_weights, delta_reg_weights)]
         delta_biases = [db + self._lambda * dRb/self.n for db, dRb in zip(delta_biases, delta_reg_biases)]
         
-        # sum of square gradients
-        # self.SS_delta_weights = [SSdW + dW**2 for dW, SSdW in zip(delta_weights, self.SS_delta_weights)]
-        # self.SS_delta_biases = [SSdb + db**2 for db, SSdb in zip(delta_biases, self.SS_delta_biases)]
-        
         
         """
         update weights and biases
         """
         # use optimizer to update params
-        # self.W = [self.optimizer.update(W, dW, SSdW, self.learning_rate)
-                 # for W, dW, SSdW in zip(self.W, delta_weights, self.SS_delta_weights)]
-        # self.b = [self.optimizer.update(b, db, SSdb, self.learning_rate)
-                 # for b, db, SSdb in zip(self.b, delta_biases, self.SS_delta_biases)]
-        
         self.W = self.optimizer.update_W(self.W, delta_weights, self.learning_rate)
         self.b = self.optimizer.update_b(self.b, delta_biases, self.learning_rate)
         
+    
     def fit(self, data, labels, 
             learning_rate = 0.1, 
             epochs = 10, 
@@ -143,6 +160,11 @@ class Network(object):
         
         # update weight std
         self.W = self.W/np.sqrt(dim_data)
+        
+        # set learning rate for batch normalization
+        for i in range(len(self.batch_normalizations)):
+            if self.batch_normalizations[i]:
+                self.batch_normalizations[i].set_lr(self.learning_rate)
         
         # concatenate to one array for shuffling
         data_labels = np.concatenate((data, labels), axis = 1)
@@ -199,8 +221,14 @@ class Network(object):
     def predict(self, data):
         # feedforward
         a = data
-        for W, b, activation_function in zip(self.W, self.b, self.activation_functions):
-            a = activation_function.evaluate(np.dot(W, a) + b)
+        for W, b, activation_function, BN in zip(self.W, self.b, self.activation_functions, self.batch_normalizations):
+            z = np.dot(W, a) + b
+            
+            # batch normalization for prediction
+            if BN:
+                z = BN.prediction_transform(z)
+            
+            a = activation_function.evaluate(z)
         return np.argmax(a, axis = 0)
     
     # save model into json file

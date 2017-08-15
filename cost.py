@@ -19,6 +19,8 @@ class CrossEntropyCost(object):
     
     def delta(self, z, y, g):
         a = g.evaluate(z)
+        if str(g.__class__.__name__) == "Sigmoid":
+            return (a - y)
         return (a - y)/(a * (1-a)) * g.prime(z)
     
     
