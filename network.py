@@ -1,5 +1,8 @@
 import numpy as np
+import matplotlib.pyplot as plt
 import json
+
+from libNN.optimizer import SGD
 
 class Network(object):
     def __init__(self, sizes, activations, cost):
@@ -37,11 +40,12 @@ class Network(object):
         forward propagate inputs through the network to produce outputs and backpropagate errors
         """
         zs = []
-        activations = []
+        
         
         # input data as activations in the first layer
         a = data
-        activations.append(a)
+        activations = [a]
+        # print(sum(a))
         
         # loop through all layers
         for W, b, activation_function in zip(self.W, self.b, self.activation_functions):
@@ -52,7 +56,7 @@ class Network(object):
             
             
         """
-        backpropagate errors to previous layers and update weights and biases
+        backpropagate errors to previous layers 
         """
         batch_size = labels.shape[1]
         
@@ -71,7 +75,7 @@ class Network(object):
         delta_weights[-1] = np.matmul(delta, activations[-2].T)/batch_size
         delta_biases[-1] = np.mean(delta, axis = 1, keepdims=True)
         
-
+        # hidden layer weights and biases
         for i in range(2, self.length):
             delta = np.dot(self.W[-i + 1].T, delta) * self.activation_functions[-i].prime(zs[-i])
             
@@ -84,26 +88,53 @@ class Network(object):
             delta_reg_weights = self.regularizer.weight_derivative(self.W)
             delta_reg_biases = self.regularizer.bias_derivative(self.b)
         
+        # update delta weights to include regularisation delta weights
+        delta_weights = [dW + self._lambda * dRW/self.n for dW, dRW in zip(delta_weights, delta_reg_weights)]
+        delta_biases = [db + self._lambda * dRb/self.n for db, dRb in zip(delta_biases, delta_reg_biases)]
         
-        # update weights and biases
-        self.W = [W - self.learning_rate * (dW + self._lambda*dRW/self.n) 
-                  for W, dW, dRW in zip(self.W, delta_weights, delta_reg_weights)]
-        self.b = [b - self.learning_rate * (db + self._lambda*dRb/self.n) 
-                  for b, db, dRb in zip(self.b, delta_biases, delta_reg_biases)]
-    
-    def fit(self, data, labels, learning_rate = 0.1, epochs = 10, batch_size = 16, evaluation_data=None, regularizer=None, _lambda=0):
+        # sum of square gradients
+        # self.SS_delta_weights = [SSdW + dW**2 for dW, SSdW in zip(delta_weights, self.SS_delta_weights)]
+        # self.SS_delta_biases = [SSdb + db**2 for db, SSdb in zip(delta_biases, self.SS_delta_biases)]
+        
+        
+        """
+        update weights and biases
+        """
+        # use optimizer to update params
+        # self.W = [self.optimizer.update(W, dW, SSdW, self.learning_rate)
+                 # for W, dW, SSdW in zip(self.W, delta_weights, self.SS_delta_weights)]
+        # self.b = [self.optimizer.update(b, db, SSdb, self.learning_rate)
+                 # for b, db, SSdb in zip(self.b, delta_biases, self.SS_delta_biases)]
+        
+        self.W = self.optimizer.update_W(self.W, delta_weights, self.learning_rate)
+        self.b = self.optimizer.update_b(self.b, delta_biases, self.learning_rate)
+        
+    def fit(self, data, labels, 
+            learning_rate = 0.1, 
+            epochs = 10, 
+            batch_size = 16, 
+            evaluation_data=None, 
+            regularizer=None, 
+            _lambda=0, 
+            optimizer=SGD(),
+            plot_error = False):
         """
         data: training features, numpy ndarray of size n*F, where n is number of training data and F is number of features in each sample
         labels: training labels, numpy ndarray of size n*1, where n is number of training data
-        learning_rate: learning rate for gradient descent
+        learning_rate: learning rate for gradient descent, 0.01 is a good starting point for Adaptive gradients (Adagrad, Adadelta, Adam, RMSprops, etc.)
         epochs: number of epochs for training
         batch_size: number of training samples in one batch
         regularizer: regularizer for cost function
         _lambda: regularization parameter
+        optimizer: optimization algorithm for gradient descent and learning
         """
         self.learning_rate = learning_rate
         self.regularizer = regularizer
         self._lambda = _lambda
+        self.optimizer = optimizer
+        self.optimizer.set_sizes(self.sizes)
+        self.training_errors = []
+        self.validation_errors = []
         
         n = len(data)
         self.n = n
@@ -126,8 +157,15 @@ class Network(object):
             data = data_labels[:,0:-dim_labels]
             labels = data_labels[:,-dim_labels:]
             
+            # initialize sum of squares of gradients
+            self.SS_delta_weights = [np.zeros(W.shape) for W in self.W]
+            self.SS_delta_biases = [np.zeros(b.shape) for b in self.b]
+            
             # get mini-batch data
             batch_indexes = [i for i in range(0, n, batch_size)]
+            
+            # reset timestep t
+            self.optimizer.t = 0
             for i in batch_indexes:
                 batch_data = data[i: i + batch_size]
                 batch_labels = labels[i: i + batch_size]
@@ -136,9 +174,21 @@ class Network(object):
                 self.backpropagate(batch_data.T, batch_labels.T)
             
             # training and evaluation accuracies
-            print("Training accuracy: ", self.score(data, labels))
+            training_error = self.score(data, labels)
+            self.training_errors.append(training_error)
+            print("Training accuracy: ", training_error)
             if evaluation_data:
-                print("Evaluation accuracy: ", self.score(evaluation_data[0], evaluation_data[1]))
+                validation_error = self.score(evaluation_data[0], evaluation_data[1])
+                self.validation_errors.append(validation_error)
+                print("Evaluation accuracy: ", validation_error)
+        
+        # plot training and validation errors
+        if plot_error:
+            fig = plt.figure()
+            ax = fig.add_subplot(111)
+            ax.plot(self.training_errors)
+            ax.plot(self.validation_errors)
+            fig.show()
         
     def score(self, data, labels):
         predictions = self.predict(data.T)
