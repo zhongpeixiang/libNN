@@ -43,7 +43,8 @@ Clone this git repo and run run.py to get started, the data is MNIST handwritten
 
 
 ### Regularizer
-1. L2 regularizer
+1. L1 regularizer
+2. L2 regularizer
 
 
 ### Others

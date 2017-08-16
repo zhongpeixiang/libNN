@@ -15,3 +15,21 @@ class L2Regularizer(object):
         b: a list of bias vector comprimsing all biases in the network
         """
         return [layer_b * 0 for layer_b in b]
+
+
+class L1Regularizer(object):
+    def __init__(self):
+        pass
+    
+    def weight_derivative(self, W):
+        """
+        W: a list of weight matrix comprimsing all weights in the network
+        """
+        # return derivatives of |W|
+        return [2 * (layer_W > 0).astype(np.float) - np.ones(layer_W.shape) for layer_W in W]
+    
+    def bias_derivative(self, b):
+        """
+        b: a list of bias vector comprimsing all biases in the network
+        """
+        return [layer_b * 0 for layer_b in b]

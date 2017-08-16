@@ -4,7 +4,7 @@ from time import time
 from libNN.network import Network
 from libNN.activation import ReLU, Sigmoid, Softmax
 from libNN.cost import QuadraticCost, CrossEntropyCost
-from libNN.regularizer import L2Regularizer
+from libNN.regularizer import L2Regularizer, L1Regularizer
 from libNN.optimizer import SGD, Adagrad, Adadelta, RMSprop, Adam
 from libNN.utils import BatchNormalization as BN
 
@@ -17,16 +17,16 @@ test_X = np.load('../data/test_X.npy')
 test_y = np.load('../data/test_y.npy')
 
 # model
-model = Network(sizes = [train_X.shape[1], 100, 100, train_y.shape[1]], 
-                activations = [Sigmoid(), Sigmoid(), Sigmoid()], 
+model = Network(sizes = [train_X.shape[1], 30, train_y.shape[1]], 
+                activations = [Sigmoid(), Sigmoid()], 
                 cost = CrossEntropyCost(),
-                batch_normalizations = [BN(), BN(), BN()])
+                batch_normalizations = [BN(), BN()])
 
 # training
-model.fit(data = train_X[:50000], 
-          labels = train_y[:50000], 
-          batch_size = 50, 
-          epochs = 30, 
+model.fit(data = train_X[:10000], 
+          labels = train_y[:10000], 
+          batch_size = 20, 
+          epochs = 10, 
           learning_rate = 0.1, 
           evaluation_data = (val_X, val_y),
           regularizer = L2Regularizer(),
