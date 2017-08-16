@@ -1,8 +1,11 @@
 import numpy as np
 
 class L2Regularizer(object):
-    def __init__(self):
-        pass
+    def __init__(self, _lambda = 1):
+        """
+        _lambda: regularization coefficient, larger dataset may need larger _lambda
+        """
+        self._lambda = _lambda
     
     def weight_derivative(self, W):
         """
@@ -18,8 +21,11 @@ class L2Regularizer(object):
 
 
 class L1Regularizer(object):
-    def __init__(self):
-        pass
+    def __init__(self, _lambda = 0.5):
+        """
+        _lambda: regularization coefficient, larger dataset may need larger _lambda
+        """
+        self._lambda = _lambda
     
     def weight_derivative(self, W):
         """

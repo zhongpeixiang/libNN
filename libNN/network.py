@@ -132,7 +132,6 @@ class Network(object):
             batch_size = 16, 
             evaluation_data=None, 
             regularizer=None, 
-            _lambda=0, 
             optimizer=SGD(),
             plot_error = False):
         """
@@ -142,12 +141,13 @@ class Network(object):
         epochs: number of epochs for training
         batch_size: number of training samples in one batch
         regularizer: regularizer for cost function
-        _lambda: regularization parameter
         optimizer: optimization algorithm for gradient descent and learning
         """
         self.learning_rate = learning_rate
         self.regularizer = regularizer
-        self._lambda = _lambda
+        self._lambda = 0
+        if self.regularizer:
+            self._lambda = self.regularizer._lambda
         self.optimizer = optimizer
         self.optimizer.set_sizes(self.sizes)
         self.training_errors = []

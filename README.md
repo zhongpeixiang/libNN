@@ -36,10 +36,11 @@ Clone this git repo and run run.py to get started, the data is MNIST handwritten
 
 ### Optimizer
 1. SGD
-2. Adagrad
-3. Adadelta
-4. RMSprop
-5. Adam
+2. SGDMomentum
+3. Adagrad
+4. Adadelta
+5. RMSprop
+6. Adam
 
 
 ### Regularizer

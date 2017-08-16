@@ -20,9 +20,45 @@ class SGD(object):
         return [b - lr*db for b, db in zip(biases, delta_biases)]
     
 
+
+class SGDMomentum(object):
+    def __init__(self, gamma=0.9):
+        """
+        SGD with Momentum
+        gamma: momentum term, larger if the gradient has more momentum in original directions and resist new changes
+        """
+        self.t = 0
+        self.gamma = gamma
+        
+    
+    def set_sizes(self, sizes):
+        self.sizes = sizes
+        # moment
+        self.moment_W = [np.zeros((y, x)) for x, y in zip(self.sizes[:-1], self.sizes[1:])]
+        self.moment_b = [np.zeros((y, 1)) for y in self.sizes[1:]]
+        
+    def update_W(self, weights, delta_weights, lr):
+        """
+        weights: weights parameters for one layer (weights or biases)
+        delta_weights: delta weights (weight gradients)
+        lr: learning rate
+        """
+        self.t += 1
+        # update moment
+        self.moment_W = [self.gamma*mW + lr*dW for mW, dW in zip(self.moment_W, delta_weights)]
+        return [W - mW for W, mW in zip(weights, self.moment_W)]
+    
+    def update_b(self, biases, delta_biases, lr):
+        self.moment_b = [self.gamma*mb + lr*db for mb, db in zip(self.moment_b, delta_biases)]
+        return [b - mb for b, mb in zip(biases, self.moment_b)]
+
+
+
+
 class Adagrad(object):
     def __init__(self, epsilon=1e-8):
         """
+        Adaptive gradient algorithm for each parameter
         epsilon: smoothing term in the denorminator to avoid division by zero
         """
         self.epsilon = epsilon

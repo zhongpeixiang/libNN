@@ -5,7 +5,7 @@ from libNN.network import Network
 from libNN.activation import ReLU, Sigmoid, Softmax
 from libNN.cost import QuadraticCost, CrossEntropyCost
 from libNN.regularizer import L2Regularizer, L1Regularizer
-from libNN.optimizer import SGD, Adagrad, Adadelta, RMSprop, Adam
+from libNN.optimizer import SGD, SGDMomentum, Adagrad, Adadelta, RMSprop, Adam
 from libNN.utils import BatchNormalization as BN
 
 # load data sets
@@ -27,10 +27,9 @@ model.fit(data = train_X[:10000],
           labels = train_y[:10000], 
           batch_size = 20, 
           epochs = 10, 
-          learning_rate = 0.1, 
+          learning_rate = 0.01, 
           evaluation_data = (val_X, val_y),
-          regularizer = L2Regularizer(),
-          _lambda = 0,
+          regularizer = L2Regularizer(_lambda = 10),
           optimizer = SGD(),
           plot_error = False)
 
