@@ -1,6 +1,20 @@
 # libNN
 #### A (deep) neural network library built from scratch in Python 3
 
+
+
+## Dependencies
+#### Python3, Numpy, Matplotlib (optional)
+
+
+
+## Installation
+#### Clone this git repo and run run.py to get started, the data is MNIST handwritten digit recognition data set
+
+
+
+## Currently Implemented: 
+
 ### Network
 1. Fully-connected feedforward neural network
 
