@@ -41,7 +41,7 @@ class BatchNormalization(object):
         self.mean = np.mean(z, axis = 1, keepdims=True)
         self.var = np.var(z, axis = 1, keepdims=True)
         self.z_ = (z - self.mean)/np.sqrt(self.var + self.epsilon)
-        self.y = self.gamma * z + self.beta
+        self.y = self.gamma * self.z_ + self.beta
         
         return self.y
     
@@ -49,6 +49,7 @@ class BatchNormalization(object):
         """
         return delta loss with respect to original z
         """
+        
         # batch size
         self.m = delta.shape[1]
         
@@ -63,6 +64,7 @@ class BatchNormalization(object):
         # update gamma and beta
         self.gamma -= self.lr * delta_gamma
         self.beta -= self.lr * delta_beta
+        
         
         return delta_z
     

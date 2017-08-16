@@ -4,12 +4,12 @@
 
 
 ## Dependencies
-#### Python3, Numpy, Matplotlib (optional)
+Python3, Numpy, Matplotlib (optional)
 
 
 
 ## Installation
-#### Clone this git repo and run run.py to get started, the data is MNIST handwritten digit recognition data set
+Clone this git repo and run run.py to get started, the data is MNIST handwritten digit recognition data set
 
 
 
