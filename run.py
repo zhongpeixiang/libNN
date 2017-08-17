@@ -32,7 +32,8 @@ model.fit(data = train_X[:1000],
           regularizer = None,
           optimizer = SGD(),
           plot_error = False,
-          dropout = [0.2, 0.5])
+          dropout = None,
+          early_stopping = (5, 1))
 
 # score
 score = model.score(test_X, test_y)

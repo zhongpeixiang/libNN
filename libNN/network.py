@@ -152,7 +152,8 @@ class Network(object):
             regularizer=None, 
             optimizer=SGD(),
             plot_error = False,
-            dropout = None):
+            dropout = None,
+            early_stopping = (5, 1)):
         """
         data: training features, numpy ndarray of size n*F, where n is number of training data and F is number of features in each sample
         labels: training labels, numpy ndarray of size n*1, where n is number of training data
@@ -163,6 +164,7 @@ class Network(object):
         optimizer: optimization algorithm for gradient descent and learning
         plot_error: set True to plot training and validation error against epochs
         dropout: a list of dropout strengths for input and hidden layers, 0 means no dropout and 1 means dropping out all units
+        early_stopping: a tuple (number of consecutive epochs tested, threshold) to implement early stopping to reduce overfitting, set to False if no early_stopping
         """
         if dropout != None and len(dropout) != self.length - 1:
             raise ValueError('number of dropout strengths does not match with number of layers except output layer')
@@ -176,6 +178,7 @@ class Network(object):
         self.optimizer.set_sizes(self.sizes)
         self.training_errors = []
         self.validation_errors = []
+        self.early_stopping = early_stopping
         
         # dropout
         if dropout:
@@ -234,6 +237,18 @@ class Network(object):
                 validation_error = self.score(evaluation_data[0], evaluation_data[1])
                 self.validation_errors.append(validation_error)
                 print("Evaluation accuracy: ", validation_error)
+                
+                # early stopping
+                if self.early_stopping != False:
+                    max_accuracy = max(self.validation_errors)
+                    """
+                    if validation erros of last a few consecutive epochs are all larger than 
+                    a min validation error so far by a certain threshold, stop training. 
+                    This applies to validation accuracy metric as well
+                    """
+                    if all((100*(max_accuracy/np.array(self.validation_errors[-self.early_stopping[0]:]) - 1)) > self.early_stopping[1]):
+                        print("Early stopping!!!")
+                        break
         
         # plot training and validation errors
         if plot_error:
