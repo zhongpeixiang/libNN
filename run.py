@@ -17,21 +17,22 @@ test_X = np.load('../data/test_X.npy')
 test_y = np.load('../data/test_y.npy')
 
 # model
-model = Network(sizes = [train_X.shape[1], 30, train_y.shape[1]], 
+model = Network(sizes = [train_X.shape[1], 200, train_y.shape[1]], 
                 activations = [Sigmoid(), Sigmoid()], 
                 cost = CrossEntropyCost(),
                 batch_normalizations = [BN(), BN()])
 
 # training
-model.fit(data = train_X[:10000], 
-          labels = train_y[:10000], 
+model.fit(data = train_X[:1000], 
+          labels = train_y[:1000], 
           batch_size = 20, 
-          epochs = 10, 
-          learning_rate = 0.01, 
+          epochs = 30, 
+          learning_rate = 0.1, 
           evaluation_data = (val_X, val_y),
-          regularizer = L2Regularizer(_lambda = 10),
+          regularizer = None,
           optimizer = SGD(),
-          plot_error = False)
+          plot_error = False,
+          dropout = [0.2, 0.5])
 
 # score
 score = model.score(test_X, test_y)

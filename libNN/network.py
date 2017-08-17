@@ -49,14 +49,24 @@ class Network(object):
         labels: batch labels in numpy.ndarray
         forward propagate inputs through the network to produce outputs and backpropagate errors
         """
+        # get dropout masks for this mini-batch
+        dropout_masks = self.get_dropout_masks()
+        
         zs = []
         
         # input data as activations in the first layer
         a = data
+        
+        # dropout for input layer activations and scale by 1/p
+        a = a * dropout_masks[0]/self.dropout_p[0]
+        
         activations = [a]
         
+        
         # loop through all layers
-        for W, b, activation_function, BN in zip(self.W, self.b, self.activation_functions, self.batch_normalizations):
+        for W, b, activation_function, BN, dropout_mask, p in zip(self.W, self.b, self.activation_functions, self.batch_normalizations, dropout_masks[1:], self.dropout_p[1:]):
+            
+            # feedforward
             z = np.dot(W, a) + b
             
             # batch normalization
@@ -66,6 +76,10 @@ class Network(object):
             
             zs.append(z)
             a = activation_function.evaluate(z)
+            
+            # drop out some units and scale active units by 1/p, where p  = 1 - dropout
+            a = a * dropout_mask/p
+            
             activations.append(a)
             
             
@@ -76,6 +90,7 @@ class Network(object):
         
         # deltas for output layer
         delta = self.cost.delta(zs[-1], labels, self.activation_functions[-1])
+        
         
         # if there is batch normalization at output layer
         if self.batch_normalizations[-1]:
@@ -98,6 +113,9 @@ class Network(object):
         # hidden layer weights and biases
         for i in range(2, self.length):
             delta = np.dot(self.W[-i + 1].T, delta) * self.activation_functions[-i].prime(zs[-i])
+            
+            # dropout
+            delta = delta * dropout_masks[-i]
             
             # backprop for batch normalization
             if self.batch_normalizations[-i]:
@@ -133,7 +151,8 @@ class Network(object):
             evaluation_data=None, 
             regularizer=None, 
             optimizer=SGD(),
-            plot_error = False):
+            plot_error = False,
+            dropout = None):
         """
         data: training features, numpy ndarray of size n*F, where n is number of training data and F is number of features in each sample
         labels: training labels, numpy ndarray of size n*1, where n is number of training data
@@ -142,7 +161,12 @@ class Network(object):
         batch_size: number of training samples in one batch
         regularizer: regularizer for cost function
         optimizer: optimization algorithm for gradient descent and learning
+        plot_error: set True to plot training and validation error against epochs
+        dropout: a list of dropout strengths for input and hidden layers, 0 means no dropout and 1 means dropping out all units
         """
+        if dropout != None and len(dropout) != self.length - 1:
+            raise ValueError('number of dropout strengths does not match with number of layers except output layer')
+            
         self.learning_rate = learning_rate
         self.regularizer = regularizer
         self._lambda = 0
@@ -152,6 +176,13 @@ class Network(object):
         self.optimizer.set_sizes(self.sizes)
         self.training_errors = []
         self.validation_errors = []
+        
+        # dropout
+        if dropout:
+            self.dropout_p = [1 - _ for _ in dropout] # probability of retaining a unit
+            self.dropout_p.append(1) # retaining rate for output layer is always 1
+        else:
+            self.dropout_p = [1] * self.length # no dropout, all retaining rates are 1        
         
         n = len(data)
         self.n = n
@@ -212,6 +243,15 @@ class Network(object):
             ax.plot(self.validation_errors)
             fig.show()
         
+    
+    def get_dropout_masks(self):
+        """
+        get dropout masks for all layers except output, returns a list of arrays of 0s and 1s
+        """
+        return [(np.random.rand(size, 1) > (1 - p))*1 for size, p in zip(self.sizes, self.dropout_p)]
+    
+    
+    
     def score(self, data, labels):
         predictions = self.predict(data.T)
         true_labels = np.argmax(labels, axis = 1)
