@@ -7,6 +7,16 @@ class L2Regularizer(object):
         """
         self._lambda = _lambda
     
+    def evaluate(self, W):
+        """
+        evaluate regularization cost
+        """
+        cost = 0
+        for layer_W in W:
+            cost += 0.5*np.linalg.norm(layer_W)**2
+        return self._lambda * cost
+    
+    
     def weight_derivative(self, W):
         """
         W: a list of weight matrix comprimsing all weights in the network
@@ -26,6 +36,15 @@ class L1Regularizer(object):
         _lambda: regularization coefficient, larger dataset may need larger _lambda
         """
         self._lambda = _lambda
+    
+    def evaluate(self, W):
+        """
+        evaluate regularization cost
+        """
+        cost = 0
+        for layer_W in W:
+            cost += np.sum(np.abs(layer_W))
+        return self._lambda * cost
     
     def weight_derivative(self, W):
         """

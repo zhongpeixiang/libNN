@@ -17,28 +17,32 @@ test_X = np.load('../data/test_X.npy')
 test_y = np.load('../data/test_y.npy')
 
 # model
-model = Network(sizes = [train_X.shape[1], 200, train_y.shape[1]], 
+model = Network(sizes = [train_X.shape[1], 30, train_y.shape[1]], 
                 activations = [Sigmoid(), Sigmoid()], 
                 cost = CrossEntropyCost(),
                 batch_normalizations = [BN(), BN()])
 
 # training
-model.fit(data = train_X[:1000], 
-          labels = train_y[:1000], 
-          batch_size = 20, 
-          epochs = 30, 
+model.fit(data = train_X[:10000], 
+          labels = train_y[:10000], 
+          batch_size = 30, 
+          epochs = 10, 
           learning_rate = 0.1, 
-          evaluation_data = (val_X, val_y),
-          regularizer = None,
+          validation_data = (val_X, val_y),
+          regularizer = L2Regularizer(),
           optimizer = SGD(),
           plot_error = False,
           dropout = None,
-          early_stopping = (5, 1))
+          early_stopping = None,
+          eval_accuracy = True,
+          verbose = 0)
 
 # score
-score = model.score(test_X, test_y)
+error = model.error(test_X, test_y)
+accuracy = model.accuracy(test_X, test_y)
 print("------------------------------------")
-print("Testing Accuracy: ", score)
+print("Testing error: ", error)
+print("Testing accuracy: ", accuracy)
 
 
 # save model

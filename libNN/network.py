@@ -62,7 +62,9 @@ class Network(object):
         
         activations = [a]
         
-        
+        ###############
+        # feedforward #
+        ###############
         # loop through all layers
         for W, b, activation_function, BN, dropout_mask, p in zip(self.W, self.b, self.activation_functions, self.batch_normalizations, dropout_masks[1:], self.dropout_p[1:]):
             
@@ -86,6 +88,9 @@ class Network(object):
         """
         backpropagate errors to previous layers 
         """
+        ############
+        # backprop #
+        ############
         batch_size = labels.shape[1]
         
         # deltas for output layer
@@ -139,6 +144,9 @@ class Network(object):
         """
         update weights and biases
         """
+        #################
+        # params update #
+        #################
         # use optimizer to update params
         self.W = self.optimizer.update_W(self.W, delta_weights, self.learning_rate)
         self.b = self.optimizer.update_b(self.b, delta_biases, self.learning_rate)
@@ -148,12 +156,14 @@ class Network(object):
             learning_rate = 0.1, 
             epochs = 10, 
             batch_size = 16, 
-            evaluation_data=None, 
+            validation_data=None, 
             regularizer=None, 
             optimizer=SGD(),
             plot_error = False,
             dropout = None,
-            early_stopping = (5, 1)):
+            early_stopping = (5, 1),
+            eval_accuracy = False,
+            verbose = 0):
         """
         data: training features, numpy ndarray of size n*F, where n is number of training data and F is number of features in each sample
         labels: training labels, numpy ndarray of size n*1, where n is number of training data
@@ -165,6 +175,7 @@ class Network(object):
         plot_error: set True to plot training and validation error against epochs
         dropout: a list of dropout strengths for input and hidden layers, 0 means no dropout and 1 means dropping out all units
         early_stopping: a tuple (number of consecutive epochs tested, threshold) to implement early stopping to reduce overfitting, set to False if no early_stopping
+        verbose: show training errors and accuracies if not 0
         """
         if dropout != None and len(dropout) != self.length - 1:
             raise ValueError('number of dropout strengths does not match with number of layers except output layer')
@@ -177,10 +188,16 @@ class Network(object):
         self.optimizer = optimizer
         self.optimizer.set_sizes(self.sizes)
         self.training_errors = []
+        self.training_accuracies = []
         self.validation_errors = []
+        self.validation_accuracies = []
         self.early_stopping = early_stopping
+        self.eval_accuracy = eval_accuracy
+        self.verbose = verbose
         
-        # dropout
+        ###########
+        # dropout #
+        ###########
         if dropout:
             self.dropout_p = [1 - _ for _ in dropout] # probability of retaining a unit
             self.dropout_p.append(1) # retaining rate for output layer is always 1
@@ -202,6 +219,10 @@ class Network(object):
         
         # concatenate to one array for shuffling
         data_labels = np.concatenate((data, labels), axis = 1)
+        
+        ############
+        # training #
+        ############
         
         for e in range(epochs):
             
@@ -226,31 +247,53 @@ class Network(object):
                 batch_data = data[i: i + batch_size]
                 batch_labels = labels[i: i + batch_size]
                 
+                ############
+                # backprop #
+                ############
                 # forward and back propagate errors and update weights and biases
                 self.backpropagate(batch_data.T, batch_labels.T)
             
-            # training and evaluation accuracies
-            training_error = self.score(data, labels)
-            self.training_errors.append(training_error)
-            print("Training accuracy: ", training_error)
-            if evaluation_data:
-                validation_error = self.score(evaluation_data[0], evaluation_data[1])
+            
+            ##############
+            # monitoring #
+            ##############
+            if self.verbose != 0:
+                # training errors and accuracies
+                training_error = self.error(data, labels)
+                self.training_errors.append(training_error)
+                print("Training error: ", training_error)
+                
+                if self.eval_accuracy:
+                    training_accuracy = self.accuracy(data, labels)
+                    self.training_accuracies.append(training_accuracy)
+                    print("Training accuracy: ", training_accuracy)
+            
+            # validation errors and accuracies
+            if validation_data:
+                validation_error = self.error(validation_data[0], validation_data[1])
                 self.validation_errors.append(validation_error)
-                print("Evaluation accuracy: ", validation_error)
+                print("Validation error: ", validation_error)
+                
+                if self.eval_accuracy:
+                    validation_accuracy = self.accuracy(validation_data[0], validation_data[1])
+                    self.validation_accuracies.append(validation_accuracy)
+                    print("Evaluation accuracy: ", validation_accuracy)
                 
                 # early stopping
-                if self.early_stopping != False:
-                    max_accuracy = max(self.validation_errors)
+                if self.early_stopping != False and self.early_stopping != None:
+                    min_error = max(self.validation_errors)
                     """
-                    if validation erros of last a few consecutive epochs are all larger than 
-                    a min validation error so far by a certain threshold, stop training. 
-                    This applies to validation accuracy metric as well
+                    if validation errors of last a few consecutive epochs are all larger than 
+                    a min validation error so far by a certain threshold, then stop training. 
                     """
-                    if all((100*(max_accuracy/np.array(self.validation_errors[-self.early_stopping[0]:]) - 1)) > self.early_stopping[1]):
+                    if all((100*(np.array(self.validation_errors[-self.early_stopping[0]:])/min_error - 1)) > self.early_stopping[1]):
                         print("Early stopping!!!")
                         break
         
-        # plot training and validation errors
+        ############
+        # plotting #
+        ############
+        # plot training and validation accuracies
         if plot_error:
             fig = plt.figure()
             ax = fig.add_subplot(111)
@@ -267,14 +310,29 @@ class Network(object):
     
     
     
-    def score(self, data, labels):
+    def error(self, data, labels):
+        # return cost function evaluation + regularization cost
+        # cost evaluated by cost function
         predictions = self.predict(data.T)
+        cost = self.cost.evaluate(predictions, labels.T)
+        
+        # add regularization cost
+        if self.regularizer:
+            cost += self.regularizer.evaluate(self.W)
+        cost = cost/len(data)
+        return cost
+    
+    
+    def accuracy(self, data, labels):
+        # accuracy: true predictions / total predictions
+        predictions = self.predict(data.T)
+        predictions = np.argmax(predictions, axis = 0)
         true_labels = np.argmax(labels, axis = 1)
         return sum(predictions == true_labels)/len(labels)
     
     
     def predict(self, data):
-        # feedforward
+        # feedforward and return output activations
         a = data
         for W, b, activation_function, BN in zip(self.W, self.b, self.activation_functions, self.batch_normalizations):
             z = np.dot(W, a) + b
@@ -284,7 +342,9 @@ class Network(object):
                 z = BN.prediction_transform(z)
             
             a = activation_function.evaluate(z)
-        return np.argmax(a, axis = 0)
+        return a
+    
+    
     
     # save model into json file
     def save(self, filename):
