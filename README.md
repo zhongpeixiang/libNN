@@ -61,3 +61,7 @@ Clone this git repo and run run.py to get started, the data is MNIST handwritten
 3. Ioffe, Sergey, and Christian Szegedy. "Batch normalization: Accelerating deep network training by reducing internal covariate shift." International Conference on Machine Learning. 2015. (http://proceedings.mlr.press/v37/ioffe15.pdf)
 4. Srivastava, Nitish, et al. "Dropout: a simple way to prevent neural networks from overfitting." Journal of machine learning research 15.1 (2014): 1929-1958. (https://www.cs.toronto.edu/~hinton/absps/JMLRdropout.pdf)
 5. Prechelt, Lutz. "Early stopping-but when?." Neural Networks: Tricks of the trade (1998): 553-553. (https://www.researchgate.net/profile/Lutz_Prechelt/publication/2874749_Early_Stopping_-_But_When/links/551bc1650cf2fe6cbf75e533.pdf)
+6. Stanford Online Course CS224n: Natural Language Processing with Deep Learning (http://web.stanford.edu/class/cs224n/index.html)
+7. Mikolov, Tomas, et al. "Efficient estimation of word representations in vector space." arXiv preprint arXiv:1301.3781 (2013). (https://arxiv.org/pdf/1301.3781.pdf)
+8. Mikolov, Tomas, et al. "Distributed representations of words and phrases and their compositionality." Advances in neural information processing systems. 2013. (http://papers.nips.cc/paper/5021-distributed-representations-of-words-and-phrases-and-their-compositionality.pdf)
+9. Stanford Online Course CS224n Solutions (https://github.com/kvfrans/cs224-solutions)
