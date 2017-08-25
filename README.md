@@ -17,6 +17,7 @@ Clone this git repo and run run.py to get started, the data is MNIST handwritten
 
 ### Network
 1. Fully-connected feedforward neural network
+2. Word2Vec (skipgram and cbow)
 
 
 ### Weight Initialization
