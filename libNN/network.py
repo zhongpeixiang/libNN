@@ -1,3 +1,8 @@
+from os import listdir
+from os.path import isfile, join
+import operator
+import csv
+
 import numpy as np
 import matplotlib.pyplot as plt
 import json
@@ -365,6 +370,9 @@ class Network(object):
     
     
     
+"""
+Word2Vec Word Embedding
+"""    
     
 class Word2Vec(object):
     def __init__(self, word_dim):
@@ -557,3 +565,138 @@ class Word2Vec(object):
         """
         word_count = self.dataset._wordcount
         return word_count
+    
+    
+    
+
+    
+"""
+GloVe Word Embedding
+"""
+class GloVe(object):
+    def __init__(self, word_dim):
+        self.word_dim = word_dim
+    
+    def vocab_list(self):
+        """
+        construct a vocabulary dictionary of unigram counts
+        """
+        print("Building vocabulary dictionary...")
+        # return dictionary of word counts
+        vocab = {}
+        counter = 0
+        
+        # a list of filenames
+        self.text_filenames = [join(self.corpus, f) for f in listdir(self.corpus) if isfile(join(self.corpus, f))]
+        self.num_files = len(self.text_filenames)
+        
+        if self.load_vocab:
+            with open(self.load_vocab, 'rb') as csv_file:
+                reader = csv.reader(csv_file)
+                vocab = dict(reader)
+        else:
+            # loop through every file and get word counts
+            for text_filename in self.text_filenames:
+                counter += 1
+                textfile = open(text_filename, "r")
+                words = textfile.read().split(" ")
+
+                for word in words:
+                    if word not in vocab:
+                        vocab[word] = 1
+                    else:
+                        vocab[word] += 1
+                textfile.close()
+                print("Building vocabulary progress: {0}%".format(100*counter/self.num_files))
+        self.vocab = vocab
+        
+        # a list of tuples sorted by word counts, capped by vocab limit
+        self.sorted_vocab = sorted(self.vocab.items(), key=operator.itemgetter(1), reverse=True)[:self.vocab_limit]
+        
+        # a dictionary mapping word to its index in cooccurrence matrix
+        self.word_table = {item[0]: index for index, item in enumerate(self.sorted_vocab)}
+        
+        # vocab size
+        self.num_word = len(self.word_table)
+        
+        # save vocab dictionary
+        if self.save_vocab:
+            with open(self.save_vocab, 'w') as csv_file:
+                print("Saving vocabulary dictionary...")
+                writer = csv.writer(csv_file)
+                for key, value in vocab.items():
+                    writer.writerow([key, value])
+                print("Saving vocabulary dictionary completed.")
+    
+    def cooccurrence_matrix(self):
+        """
+        construct a cooccurrence matrix
+        """
+        print("Building cooccurrence matrix...")
+        # initialize matrix
+        matrix = np.zeros((self.num_word, self.num_word))
+        window_size = self.window_size
+        counter = 0
+        
+        if self.load_matrix:
+            matrix = np.load(self.load_matrix)
+        
+        # loop through every file and get word counts
+        for text_filename in self.text_filenames:
+            counter += 1
+            textfile = open(text_filename, "r")
+            words = textfile.read().split(" ")
+            
+            for index, word in enumerate(words):
+                context_words = words[max(index - window_size, 0) : index] + words[index + 1 : index + window_size + 1]
+                context_indices = [self.word_table[context_word] for context_word in context_words]
+                matrix[self.word_table[word], context_indices] += 1
+            textfile.close()
+            print("Building matrix progress: {0}%".format(100*counter/self.num_files))
+        
+        self.matrix = matrix
+        
+        if self.save_matrix:
+            print("Saving cooccurrence matrix...")
+            np.save(self.save_matrix, matrix)
+            print("Saving cooccurrence matrix completed")
+    
+    
+    
+    def train(self):
+        """
+        train word vectors using neural network
+        """
+        self.W1 = np.random.rand(self.word_dim, self.num_word) - 0.5 # (word_dim, num_word)
+        self.W2 = np.zeros((self.num_word, self.word_dim)) # (num_word, word_dim)
+        pass
+    
+    
+    def fit(self, corpus, window_size = 5, vocab_limit = 50000, save_vocab=None, load_vocab=None, save_matrix=None, load_matrix=None):
+        """
+        train glove model based on the cooccurrence matrix
+        corpus: corpus directory
+        window_size: context window size
+        save_vocab: path of csv file to save vocabulary dictionary
+        load_vocab: csv file to load vocabulary dictionary
+        save_matrix: path of npy file to save cooccurrence matrix
+        load_matrix: npy file to load cooccurrence matrix
+        """
+        self.corpus = corpus
+        self.window_size = window_size
+        self.vocab_limit = vocab_limit
+        self.save_vocab = save_vocab
+        self.load_vocab = load_vocab
+        self.save_matrix = save_matrix
+        self.load_matrix = load_matrix
+        
+        # build vocabulary dictionary
+        self.vocab_list()
+        
+        # build cooccurrence matrix
+        self.cooccurrence_matrix()
+        
+        # train word vectors
+        self.train()
+    
+    
