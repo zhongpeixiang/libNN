@@ -587,13 +587,21 @@ class GloVe(object):
         counter = 0
         
         # a list of filenames
-        self.text_filenames = [join(self.corpus, f) for f in listdir(self.corpus) if isfile(join(self.corpus, f))]
+        self.text_filenames = [join(self.corpus, f) for f in listdir(self.corpus) if isfile(join(self.corpus, f)) and not f.startswith('.')]
         self.num_files = len(self.text_filenames)
+        print("List of corpus files: ")
+        for filename in self.text_filenames:
+            print(filename)
+        
         
         if self.load_vocab:
-            with open(self.load_vocab, 'rb') as csv_file:
+            print("Loading vocabulary files... ")
+            with open(self.load_vocab, 'r') as csv_file:
                 reader = csv.reader(csv_file)
-                vocab = dict(reader)
+                vocab = {}
+                for row in reader:
+                    vocab[row[0]] = int(row[1])
+            print("Loading vocabulary files completed. ")
         else:
             # loop through every file and get word counts
             for text_filename in self.text_filenames:
@@ -611,7 +619,7 @@ class GloVe(object):
         self.vocab = vocab
         
         # a list of tuples sorted by word counts, capped by vocab limit
-        self.sorted_vocab = sorted(self.vocab.items(), key=operator.itemgetter(1), reverse=True)[:self.vocab_limit]
+        self.sorted_vocab = sorted(vocab.items(), key=operator.itemgetter(1), reverse=True)[:self.vocab_limit]
         
         # a dictionary mapping word to its index in cooccurrence matrix
         self.word_table = {item[0]: index for index, item in enumerate(self.sorted_vocab)}
@@ -627,34 +635,53 @@ class GloVe(object):
                 for key, value in vocab.items():
                     writer.writerow([key, value])
                 print("Saving vocabulary dictionary completed.")
+        if self.save_word_table:
+            with open(self.save_word_table, 'w') as csv_file:
+                print("Saving word table...")
+                writer = csv.writer(csv_file)
+                for key, value in self.word_table.items():
+                    writer.writerow([key, value])
+                print("Saving word table completed.")
     
     def cooccurrence_matrix(self):
         """
         construct a cooccurrence matrix
         """
-        print("Building cooccurrence matrix...")
         # initialize matrix
         matrix = np.zeros((self.num_word, self.num_word))
         window_size = self.window_size
+        word_table = self.word_table
         counter = 0
         
         if self.load_matrix:
+            print("Loading cooccurrence matrix... ")
             matrix = np.load(self.load_matrix)
+            print("Loading cooccurrence matrix completed. ")
+        else:
+            # loop through every file and get word counts
+            for text_filename in self.text_filenames:
+                counter += 1
+                textfile = open(text_filename, "r")
+                words = textfile.read().split(" ")
+
+                for index, word in enumerate(words):
+                    if word in word_table:
+                        # context_words = words[max(index - window_size, 0) : index] + words[index + 1 : index + window_size + 1]
+                        # context_indices = [word_table[context_word] for context_word in context_words if context_word in word_table]
+                        # matrix[word_table[word], context_indices] += 1
+                        
+                        # weighted word occurrence count by distance
+                        for context_index in range(max(index - window_size, 0), index + window_size + 1):
+                            if context_index != index and words[context_index] in word_table:
+                                matrix[word_table[word], word_table[context_index]] += 1/np.abs(context_index - index)
+                textfile.close()
+                print("Building matrix progress: {0}%".format(100*counter/self.num_files))
         
-        # loop through every file and get word counts
-        for text_filename in self.text_filenames:
-            counter += 1
-            textfile = open(text_filename, "r")
-            words = textfile.read().split(" ")
-            
-            for index, word in enumerate(words):
-                context_words = words[max(index - window_size, 0) : index] + words[index + 1 : index + window_size + 1]
-                context_indices = [self.word_table[context_word] for context_word in context_words]
-                matrix[self.word_table[word], context_indices] += 1
-            textfile.close()
-            print("Building matrix progress: {0}%".format(100*counter/self.num_files))
+        # self.matrix = matrix
         
-        self.matrix = matrix
+        # to reduce size of vocabulary for faster training
+        self.matrix = matrix[:10000, :10000]
+        self.num_word = 10000
         
         if self.save_matrix:
             print("Saving cooccurrence matrix...")
@@ -665,18 +692,95 @@ class GloVe(object):
     
     def train(self):
         """
-        train word vectors using neural network
+        train word vectors
         """
-        self.W1 = np.random.rand(self.word_dim, self.num_word) - 0.5 # (word_dim, num_word)
-        self.W2 = np.zeros((self.num_word, self.word_dim)) # (num_word, word_dim)
-        pass
+        self.init_params()
+        
+        for t in range(self.epochs):
+            print("Epoch {0} of {1}...".format(t + 1, self.epochs))
+            # shuffle row and column index for minibatch sampling
+            shuffled_row = np.random.permutation(self.num_word)
+            shuffled_col = np.random.permutation(self.num_word)
+            
+            counter = 0
+
+            for i in shuffled_row:
+                counter += 1
+                if counter % 1000 == 0:
+                    print("Processed {0} samples...".format(counter))
+                batch_indices = [i for i in range(0, self.num_word, self.batch_size)]
+                for j in batch_indices:
+                    dW1 = np.zeros(self.W1.shape)# (num_word, word_dim), W1 derivative matrix
+                    dW2 = np.zeros(self.W2.shape)
+                    
+                    db1 = np.zeros(self.b1.shape) # (num_word, 1), bias derivative vector
+                    db2 = np.zeros(self.b2.shape)
+                    
+                    js = shuffled_col[j : j + self.batch_size] # column indices for this mini batch
+                    batch_data = self.matrix[i, js] # Xij values
+                    weighting = np.minimum((batch_data/self.x_max)**self.alpha, 1) # weightings for Xij
+                    
+                    # gradients
+                    dW1[i] = (1/self.batch_size) * 2 * np.dot(weighting * (np.dot(self.W1[i], self.W2[js].T) + self.b1[i] + self.b2[js] - np.log(1 + batch_data)), self.W2[js])
+                    db1[i] =  np.mean(2 * weighting * (np.dot(self.W1[i], self.W2[js].T) + self.b1[i] + self.b2[js] - np.log(1 + batch_data)))
+                    dW2[js] = (1/self.batch_size) * 2 * np.dot((weighting * (np.dot(self.W1[i], self.W2[js].T) + self.b1[i] + self.b2[js] - np.log(1 + batch_data))).reshape(self.batch_size, 1), self.W1[i].reshape(1, self.word_dim))
+                    db2[js] = (1/self.batch_size) * 2 * weighting * (np.dot(self.W1[i], self.W2[js].T) + self.b1[i] + self.b2[js] - np.log(1 + batch_data))
+
+                    # update params
+                    self.W1 -= self.learning_rate * dW1
+                    self.W2 -= self.learning_rate * dW2
+                    self.b1 -= self.learning_rate * db1
+                    self.b2 -= self.learning_rate * db2
+                
+                
+        if self.save_word_vectors:
+            # save word vectors
+            print("Saving word vectors...")
+            np.save(self.save_word_vectors, self.W1 + self.W2)
+            print("Saving word vectors completed")
     
     
-    def fit(self, corpus, window_size = 5, vocab_limit = 50000, save_vocab=None, load_vocab=None, save_matrix=None, load_matrix=None):
+    def init_params(self):
+        """
+        initialize weight and bias parameters for every word in the vocabulary
+        """
+        self.W1 = np.random.rand(self.num_word, self.word_dim) - 0.5 # (num_word, word_dim), uniform distribution from -0.5 - 0.5
+        self.W2 = np.random.rand(self.num_word, self.word_dim) - 0.5 # (num_word, word_dim)
+        
+        # self.SSdW1 = np.zeros(self.W1.shape)# (num_word, word_dim), Sum of Square of W1 derivative matrix
+        # self.SSdW2 = np.zeros(self.W2.shape)
+        
+        self.b1 = np.zeros(self.num_word) # (num_word, 1), bias vector
+        self.b2 = np.zeros(self.num_word)
+        
+        
+                            
+                            
+    def fit(self, 
+            corpus, 
+            window_size = 5, 
+            vocab_limit = 50000,
+            x_max = 100,
+            alpha = 0.75,
+            batch_size = 50,
+            learning_rate = 0.1,
+            epochs = 10,
+            save_vocab=None, 
+            load_vocab=None, 
+            save_matrix=None, 
+            load_matrix=None, 
+            save_word_table=None,
+            save_word_vectors=None):
         """
         train glove model based on the cooccurrence matrix
         corpus: corpus directory
         window_size: context window size
+        vocab_limit: vocabulary limit for cooccurrence matrix due to memory constraint
+        x_max: x_max in weighting function of objective function
+        alpha: alpha in weighting function of objective function
+        batch_size: number of training samples in one mini-batch
+        learning_rate: learning rate of gradient update
+        epochs: number of iterations for training word vectors
         save_vocab: path of csv file to save vocabulary dictionary
         load_vocab: csv file to load vocabulary dictionary
         save_matrix: path of npy file to save cooccurrence matrix
@@ -685,10 +789,17 @@ class GloVe(object):
         self.corpus = corpus
         self.window_size = window_size
         self.vocab_limit = vocab_limit
+        self.x_max = x_max
+        self.alpha = alpha
+        self.batch_size = batch_size
+        self.learning_rate = learning_rate
+        self.epochs = epochs
         self.save_vocab = save_vocab
         self.load_vocab = load_vocab
         self.save_matrix = save_matrix
         self.load_matrix = load_matrix
+        self.save_word_table = save_word_table
+        self.save_word_vectors = save_word_vectors
         
         # build vocabulary dictionary
         self.vocab_list()

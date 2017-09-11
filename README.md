@@ -18,6 +18,7 @@ Clone this git repo and run run.py to get started, the data is MNIST handwritten
 ### Network
 1. Fully-connected feedforward neural network
 2. Word2Vec (skipgram and cbow)
+3. GloVe
 
 
 ### Weight Initialization
@@ -66,3 +67,5 @@ Clone this git repo and run run.py to get started, the data is MNIST handwritten
 7. Mikolov, Tomas, et al. "Efficient estimation of word representations in vector space." arXiv preprint arXiv:1301.3781 (2013). (https://arxiv.org/pdf/1301.3781.pdf)
 8. Mikolov, Tomas, et al. "Distributed representations of words and phrases and their compositionality." Advances in neural information processing systems. 2013. (http://papers.nips.cc/paper/5021-distributed-representations-of-words-and-phrases-and-their-compositionality.pdf)
 9. Stanford Online Course CS224n Solutions (https://github.com/kvfrans/cs224-solutions)
+10. Pennington, Jeffrey, Richard Socher, and Christopher Manning. "Glove: Global vectors for word representation." Proceedings of the 2014 conference on empirical methods in natural language processing (EMNLP). 2014.
+11. GloVe Github Repository (https://github.com/stanfordnlp/GloVe)
