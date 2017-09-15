@@ -10,6 +10,8 @@ import random
 
 from libNN.optimizer import SGD
 
+
+
 class Network(object):
     def __init__(self, sizes, activations, cost, batch_normalizations=None):
         """
@@ -663,6 +665,7 @@ class GloVe(object):
                 counter += 1
                 textfile = open(text_filename, "r")
                 words = textfile.read().split(" ")
+                words_size = len(words)
 
                 for index, word in enumerate(words):
                     if word in word_table:
@@ -671,9 +674,9 @@ class GloVe(object):
                         # matrix[word_table[word], context_indices] += 1
                         
                         # weighted word occurrence count by distance
-                        for context_index in range(max(index - window_size, 0), index + window_size + 1):
+                        for context_index in range(max(index - window_size, 0), min(index + window_size + 1, words_size)):
                             if context_index != index and words[context_index] in word_table:
-                                matrix[word_table[word], word_table[context_index]] += 1/np.abs(context_index - index)
+                                matrix[word_table[word], word_table[words[context_index]]] += 1/np.abs(context_index - index)
                 textfile.close()
                 print("Building matrix progress: {0}%".format(100*counter/self.num_files))
         
@@ -810,4 +813,178 @@ class GloVe(object):
         # train word vectors
         self.train()
     
+
+# character level RNN
+class RNN(object):
+    def __init__(self, hidden_layer_size, activation=Tanh()):
+        """
+        vanilla RNN implementation
+        sizes: a list of size of each layer, including input and output layer
+        activations: a list of activation functions corresponding to each layer except for input layer
+        cost: cost function (loss, objective)
+        """
+        self.size = hidden_layer_size
+        self.activation = activation
+        
     
+    def initialize_params(self):
+        self.Wh = np.random.randn(self.size, self.size)/100
+        self.Wx = np.random.randn(self.size, self.vocab_size)/100
+        self.Ws = np.random.randn(self.vocab_size, self.size)/100
+        self.bh = np.zeros((self.size, 1)) # hidden bias
+        self.bs = np.zeros((self.vocab_size, 1)) # output bias
+
+    
+    
+    def fit(self, 
+            corpus, 
+            seq_size = 25,
+            learning_rate = 0.1, 
+            epochs = 5,
+            generate_text_length = 200):
+        """
+        train vanilla RNN
+        corpus: corpus directory
+        seq_size: sequence size
+        learning_rate: learning rate for gradient descent, 0.01 is a good starting point for Adaptive gradients (Adagrad, Adadelta, Adam, RMSprops, etc.)
+        epochs: number of epochs for training
+        generate_text_length: text length generated during training, set to 0 to diable it
+        """
+        self.corpus = corpus
+        self.seq_size = seq_size
+        self.learning_rate = learning_rate
+        self.epochs = epochs
+        self.generate_text_length = generate_text_length
+        
+        # preprocess files
+        text_corpus = self.process(corpus)
+                    
+        # training
+        batch_indices = [i for i in range(0, self.data_size, seq_size)]
+        
+        losses = []
+        for epoch in range(epochs):
+            print("Epoch ", epoch)
+            counter = 0
+            h_prev = np.zeros((self.size, 1)) # reset RNN memory
+            
+            # sum of squares of gradients for adagrad
+            SSdWh, SSdWx, SSdWs = np.zeros_like(self.Wh), np.zeros_like(self.Wx), np.zeros_like(self.Ws)
+            SSdbh, SSdbs = np.zeros_like(self.bh), np.zeros_like(self.bs)
+            epoch_loss = 0
+            
+            # mini-batch training
+            for i in batch_indices:
+                counter += 1
+                inputs = [self.char_to_ix[char] for char in text_corpus[i : i+seq_size]] # input character indices
+                labels = [self.char_to_ix[char] for char in text_corpus[i+1 : i+seq_size+1]] # target character indices
+                
+                # generate text after a few batches
+                if generate_text_length and counter%500 == 0:
+                    text = self.generate_text(h_prev, inputs[0])
+                    print("Progress: {0}%", 100*counter/len(batch_indices))
+                    print("Last batch loss: ", loss)
+                    print("Generating text: ", text)
+                
+                # forward
+                xs, hs, ys, ps = {}, {}, {}, {}
+                hs[-1] = np.copy(h_prev) # the initial hidden state is the last hidden state from previous batch
+                loss = 0
+                for t in range(len(inputs)):
+                    xs[t] = np.zeros((self.vocab_size, 1)) # (vocab_size, 1)
+                    xs[t][inputs[t]] = 1 # one hot encoding of input character
+                    
+                    hs[t] = np.tanh(np.dot(self.Wh, hs[t-1]) + np.dot(self.Wx, xs[t]) + self.bh) # hidden state at t (size, 1)
+                    ys[t] = np.dot(self.Ws, hs[t]) + self.bs # (vocab_size, 1)
+                    ps[t] = softmax(ys[t]) # softmax (vocab_size, 1)
+                    loss += -np.log(ps[t][labels[t]])
+                
+                # update to last hidden state
+                h_prev = hs[len(inputs) - 1]
+                
+                # loss
+                epoch_loss += loss
+                losses.append(loss)
+                
+                # backprop
+                dWh, dWx, dWs = np.zeros_like(self.Wh), np.zeros_like(self.Wx), np.zeros_like(self.Ws) # init gradients
+                dbh, dbs = np.zeros_like(self.bh), np.zeros_like(self.bs)
+                dhnext = np.zeros_like(hs[0])
+                for t in reversed(range(len(inputs))):
+                    dy = np.copy(ps[t]) # (vocab_size, 1)
+                    dy[labels[t]] -= 1 # delta 
+                    dWs += np.dot(dy, hs[t].T) # output matrix gradient (vocab_size,1) x (1,size) = (vocab_size, size)
+                    dbs += dy # output bias gradient (vocab_size, 1)
+                    
+                    dh = np.dot(self.Ws.T, dy) + dhnext # (size, vocab_size) x (vocab_size, 1) = (size, 1)
+                    dhraw = (1 - hs[t] * hs[t]) * dh # tanh_prime(z) = 1 - tanh(z) * tanh(z)
+                    
+                    dbh += dhraw # (size, 1)
+                    dWh += np.dot(dhraw, hs[t-1].T) # (size, 1) x (1, size) = (size, size)
+                    dWx += np.dot(dhraw, xs[t].T) # (size, 1) x (1, vocab_size) = (size, vocab_size)
+                    
+                    dhnext = np.dot(self.Wh, dhraw) # (size, size) x (size, 1) = (size, 1)
+                
+                # clip gradients to prevent gradient exploding
+                for dparam in [dWh, dWx, dWs, dbh, dbs]:
+                    np.clip(dparam, -5, 5, out=dparam) 
+                
+                # gradient update
+                for param, dparam, SSdparam in zip([self.Wh, self.Wx, self.Ws, self.bh, self.bs],
+                                              [dWh, dWx, dWs, dbh, dbs],
+                                              [SSdWh, SSdWx, SSdWs, SSdbh, SSdbs]):
+                    SSdparam += dparam * dparam
+                    param += -self.learning_rate * dparam/np.sqrt(SSdparam + 1e-8)
+            epoch_loss = seq_size*epoch_loss/self.vocab_size
+            print("Epoch {0} loss: {1}".format(epoch, epoch_loss))
+        print("Loss data per mini batch: ")
+        print(losses)
+    
+    def process(self, corpus):
+        self.text_filenames = [join(corpus, f) for f in listdir(corpus) if isfile(join(corpus, f)) and not f.startswith('.')]
+        print("List of corpus files: ")
+        for filename in self.text_filenames:
+            print(filename)
+        self.num_files = len(self.text_filenames)
+        
+        # text data in string format
+        data = ""
+        for text_filename in self.text_filenames:
+            textfile = open(text_filename, "r")
+            data += textfile.read()
+        
+        # a list of unique characters
+        self.chars = list(set(data))
+        
+        self.data_size = len(data)
+        self.vocab_size = len(self.chars)
+        print("Data size: ", self.data_size)
+        print("Vocab size: ", self.vocab_size)
+        
+        self.char_to_ix = {char:i for i, char in enumerate(self.chars)}
+        self.ix_to_char = {i:char for i, char in enumerate(self.chars)}
+        
+        # init params
+        self.initialize_params()
+        
+        return data
+
+    
+    def generate_text(self, h, seed_idx):
+        x = np.zeros((self.vocab_size, 1))
+        x[seed_idx] = 1
+        ixes = []
+        
+        for t in range(self.generate_text_length):
+            h = np.tanh(np.dot(self.Wh, h) + np.dot(self.Wx, x) + self.bh)
+            y = np.dot(self.Ws, h) + self.bs
+            p = softmax(y)
+            ix = np.random.choice(range(self.vocab_size), p=p.ravel())
+            x = np.zeros((self.vocab_size, 1))
+            x[ix] = 1
+            ixes.append(ix)
+        return "".join([self.ix_to_char[ix] for ix in ixes])    
+        
+def softmax(z):
+    z = z - np.max(z, axis = 0)
+    return np.exp(z)/np.sum(np.exp(z), axis = 0)

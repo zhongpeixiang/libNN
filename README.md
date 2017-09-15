@@ -19,6 +19,8 @@ Clone this git repo and run run.py to get started, the data is MNIST handwritten
 1. Fully-connected feedforward neural network
 2. Word2Vec (skipgram and cbow)
 3. GloVe
+4. Vanilla RNN
+5. Multilayer RNN (with GPU)
 
 
 ### Weight Initialization
@@ -69,3 +71,5 @@ Clone this git repo and run run.py to get started, the data is MNIST handwritten
 9. Stanford Online Course CS224n Solutions (https://github.com/kvfrans/cs224-solutions)
 10. Pennington, Jeffrey, Richard Socher, and Christopher Manning. "Glove: Global vectors for word representation." Proceedings of the 2014 conference on empirical methods in natural language processing (EMNLP). 2014.
 11. GloVe Github Repository (https://github.com/stanfordnlp/GloVe)
+12. The Unreasonable Effectiveness of Recurrent Neural Networks by Andrej Karpathy (http://karpathy.github.io/2015/05/21/rnn-effectiveness/)
+13. Code by Andrej Karpathy (https://gist.github.com/karpathy/d4dee566867f8291f086)
